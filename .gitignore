@@ -1,0 +1,14 @@
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build system directories
+build/
+dist/
+*.egg-info/
+*.egg/
+
+# pipx local installs
+pip-wheel-metadata/

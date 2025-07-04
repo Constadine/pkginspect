@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pkginspect"
+version = "25.6.0"
+description = "Quick way to inspect the PKGBUILD and avoid bad packages."
+dependencies = ["requests", "pyyaml"]
+requires-python = ">=3.8"
+
+[tool.setuptools]
+packages = ["pkginspect"]
+include-package-data = true        # enables package-data
+
+[tool.setuptools.package-data]
+"pkginspect" = ["rules.yaml"]
+
+[project.scripts]
+pkginspect = "pkginspect.cli:main"

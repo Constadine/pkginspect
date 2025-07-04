@@ -1,0 +1,29 @@
+weights:
+  # Integrity
+  missing_checksums:   -30
+  skip_checksum_some:  -30   # at least one SKIP
+  skip_checksum_all:   -50   # every source is SKIP
+  weak_hash:           -5    # md5 or sha256 instead of sha512/b2
+  # Transport
+  insecure_url:        -10
+  git_unpinned:        -10
+  # Privilege / build networking
+  network_fetch:       -15
+  sudo_or_pacman:      -25
+  privilege_escal:     -10
+  # Metadata absence
+  no_license:          -3
+  no_arch_field:       -2
+  no_maintainer_tag:   -2
+  # namcap
+  namcap_error:        -5    # per error
+
+caps:
+  integrity:  -50
+  transport:  -30
+  privilege:  -40
+  metadata:   -25
+
+blockers:
+  uses_sudo: true
+  writes_outside_pkgdir: true
