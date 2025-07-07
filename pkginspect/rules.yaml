@@ -17,12 +17,20 @@ weights:
   no_maintainer_tag:   -2
   # namcap
   namcap_error:        -5    # per error
+  # Community / AUR
+  aur_low_votes_1:   -2     #  30-100 votes
+  aur_low_votes_2:   -5     #  15-30 votes
+  aur_low_votes_3:  -15     #  0  votes
+  aur_orphaned:      -8     # no maintainer
+  aur_out_of_date:  -10     # flagged OOD
+
 
 caps:
   integrity:  -50
   transport:  -30
   privilege:  -40
   metadata:   -25
+  community:  -20
 
 blockers:
   uses_sudo: true

@@ -46,9 +46,18 @@ def namcap_errors(p: pathlib.Path | None):
         return o.stdout.count("ERROR")
     except FileNotFoundError: return None
 
-# ── scoring engine  ───────────────
-def score_pkgbuild(lines: List[str], *, local_path: pathlib.Path | None = None
+
+def score_pkgbuild(lines: List[str],
+                   *,
+                   local_path: pathlib.Path | None = None,
+                   aur_meta: dict | None = None
                    ) -> Tuple[int, List[Tuple[int,str]], Dict[str,int]]:
+
+
+
+    print("*"*80)
+    print(aur_meta)
+
     score = 100
     cat = defaultdict(int)
     msgs: List[Tuple[int, str]] = []
@@ -105,6 +114,31 @@ def score_pkgbuild(lines: List[str], *, local_path: pathlib.Path | None = None
     if (e := namcap_errors(local_path)):
         note(W["namcap_error"] * e, f"namcap {e} error(s)", "metadata")
 
+    if aur_meta:
+
+        votes = aur_meta.get("NumVotes", 0)
+        maint = aur_meta.get("Maintainer")
+        ood   = aur_meta.get("OutOfDate") not in (0, None)
+
+        # vote-based tiers
+        if votes < 1:
+            note(W["aur_low_votes_3"], f"Only {votes} votes", "community")
+        elif votes < 15:
+            note(W["aur_low_votes_2"], f"Only {votes} votes", "community")
+        elif votes < 30:
+            note(W["aur_low_votes_1"], f"Only {votes} votes", "community")
+
+        # orphaned?
+        if maint in (None, "", "orphan"):
+            note(W["aur_orphaned"], "Package is orphaned", "community")
+
+        # out-of-date?
+        if ood:
+            # aur returns epoch timestamp; convert once for readability
+            age_days = int((time.time() - aur_meta["OutOfDate"]) / 86400)
+            note(W["aur_out_of_date"],
+                 f"Flagged out of date ({age_days} days)", "community")
+
     # Apply caps
     for k, v in cat.items():
         cap = CAP.get(k)
@@ -114,6 +148,21 @@ def score_pkgbuild(lines: List[str], *, local_path: pathlib.Path | None = None
     return max(0, score), msgs, cat
 
 # ── fetchers  ─────────────────────────────────────────────────────
+# ── helper: fetch AUR JSON once per run ─────────────────────────
+def aur_metadata(pkg: str) -> dict:
+    url = ("https://aur.archlinux.org/rpc/"
+           "?v=5&type=info&arg[]=" + pkg) # will need to update when AUR moves to v6
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if data.get("resultcount") == 1:
+            return data["results"][0]
+    except Exception:
+        pass
+    return {}
+
+
 # ── 1. generic fetch with HTML-guard ──────────────────────────────
 def fetch_url(url: str) -> List[str]:
     """Return the remote text split into lines; raise if we get HTML."""
@@ -190,7 +239,14 @@ def main() -> None:
             raise
     else:               lines, loc = fetch_url(args.url), None
 
-    score, msgs, cats = score_pkgbuild(lines, local_path=loc)
+    if args.aur:
+        aur_meta = aur_metadata(args.aur)
+        if args.debug:
+            print("DEBUG: AUR meta:", aur_meta or "none")
+    else:
+        aur_meta = {}
+
+    score, msgs, cats = score_pkgbuild(lines, local_path=loc, aur_meta=aur_meta)
 
     # sort by biggest absolute deduction
     msgs_sorted = sorted(msgs, key=lambda t: abs(t[0]), reverse=True)
