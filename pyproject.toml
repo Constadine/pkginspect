@@ -9,12 +9,12 @@ description = "Quick way to inspect the PKGBUILD and avoid bad packages."
 dependencies = ["requests", "pyyaml"]
 requires-python = ">=3.8"
 
+[project.scripts]
+pkginspect = "pkginspect.cli:main"
+
 [tool.setuptools]
 packages = ["pkginspect"]
-include-package-data = true        # enables package-data
+include-package-data = true # enables package-data
 
 [tool.setuptools.package-data]
 "pkginspect" = ["rules.yaml"]
-
-[project.scripts]
-pkginspect = "pkginspect.cli:main"
