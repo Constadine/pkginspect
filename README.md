@@ -23,10 +23,9 @@
 
 > 🔒 **Blockers**: If `uses_sudo` or `writes_outside_pkgdir` is true, the score is forcibly set to 0.
 
-> 🧢 **Category Caps**:  
-> - Integrity: max −50  
-> - Transport: max −30  
-> - Privilege: max −40  
-> - Metadata: max −25  
+> 🧢 **Category Caps**:
+> - Integrity: max −50
+> - Transport: max −30
+> - Privilege: max −40
+> - Metadata: max −25
 > - Community:  -20
-

@@ -1,0 +1,14 @@
+name: build
+
+on: [pull_request, push, workflow_dispatch]
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
