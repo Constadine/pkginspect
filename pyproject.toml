@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=64", "wheel"]
-build-backend = "setuptools.build_meta"
+build-backend = "uv_build"
+requires = ["uv_build<0.8"]
 
 [project]
 name = "pkginspect"
@@ -12,9 +12,5 @@ requires-python = ">=3.8"
 [project.scripts]
 pkginspect = "pkginspect.cli:main"
 
-[tool.setuptools]
-packages = ["pkginspect"]
-include-package-data = true # enables package-data
-
-[tool.setuptools.package-data]
-"pkginspect" = ["rules.yaml"]
+[tool.uv]
+package = true
