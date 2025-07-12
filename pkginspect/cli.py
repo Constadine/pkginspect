@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import List, Tuple, Dict
 import requests, yaml, importlib.resources as res
 
+
 # ── rule loader ──────────────────────────────────────────────────
 def load_rules(path_cli: str | None) -> dict:
     search = []
@@ -13,49 +14,63 @@ def load_rules(path_cli: str | None) -> dict:
         search.append(pathlib.Path(path_cli).expanduser())
     if env := os.getenv("PKGINSPECT_RULES"):
         search.append(pathlib.Path(env).expanduser())
-    search += [pathlib.Path.cwd() / "rules.yaml",
-               pathlib.Path(os.getenv("XDG_CONFIG_HOME",
-                                       pathlib.Path.home() / ".config"))
-               / "pkginspect" / "rules.yaml"]
+    search += [
+        pathlib.Path.cwd() / "rules.yaml",
+        pathlib.Path(os.getenv("XDG_CONFIG_HOME", pathlib.Path.home() / ".config"))
+        / "pkginspect"
+        / "rules.yaml",
+    ]
     for p in search:
         if p.is_file():
             return yaml.safe_load(p.read_text())
     with res.files("pkginspect").joinpath("rules.yaml").open(encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-W: Dict[str, int] = {}; CAP: Dict[str, int] = {}; BLOCK: Dict[str, bool] = {}
+
+W: Dict[str, int] = {}
+CAP: Dict[str, int] = {}
+BLOCK: Dict[str, bool] = {}
 
 # ── helpers & regexes ────────────────────────────────────────────
-HTTPS_OK = {"github.com", "gitlab.com", "kernel.org", "sourcehut.org",
-            "codeberg.org", "archlinux.org"}
-CHECK_RE = re.compile(r'^\s*(sha(?:1|224|256|384|512)sums|md5sums|b2sums)\s*=', re.M)
-URL_RE   = re.compile(r'(?:https?|ftp)://[^\s)\'"]+')
-CURL_RE  = re.compile(r'\b(?:curl|wget)\b')
-SUDO_RE  = re.compile(r'\b(?:sudo|pacman)\b')
-SETCAP_RE = re.compile(r'\b(setcap|chmod\s+777)\b')
+HTTPS_OK = {
+    "github.com",
+    "gitlab.com",
+    "kernel.org",
+    "sourcehut.org",
+    "codeberg.org",
+    "archlinux.org",
+}
+CHECK_RE = re.compile(r"^\s*(sha(?:1|224|256|384|512)sums|md5sums|b2sums)\s*=", re.M)
+URL_RE = re.compile(r'(?:https?|ftp)://[^\s)\'"]+')
+CURL_RE = re.compile(r"\b(?:curl|wget)\b")
+SUDO_RE = re.compile(r"\b(?:sudo|pacman)\b")
+SETCAP_RE = re.compile(r"\b(setcap|chmod\s+777)\b")
 WRITE_CMD_RE = re.compile(
-    r'^\s*(?:install|cp|mv|mkdir|ln|echo|cat)\s+[^\n]*\s/(?:etc|usr|var|lib|bin)/',
-    re.M)
+    r"^\s*(?:install|cp|mv|mkdir|ln|echo|cat)\s+[^\n]*\s/(?:etc|usr|var|lib|bin)/", re.M
+)
 
-def domain(url: str) -> str: return url.split("/")[2].lower()
+
+def domain(url: str) -> str:
+    return url.split("/")[2].lower()
+
+
 def namcap_errors(p: pathlib.Path | None):
-    if p is None: return None
+    if p is None:
+        return None
     try:
-        o = subprocess.run(["namcap", "-i", str(p)],
-                           capture_output=True, text=True)
+        o = subprocess.run(["namcap", "-i", str(p)], capture_output=True, text=True)
         return o.stdout.count("ERROR")
-    except FileNotFoundError: return None
+    except FileNotFoundError:
+        return None
 
 
-def score_pkgbuild(lines: List[str],
-                   *,
-                   local_path: pathlib.Path | None = None,
-                   aur_meta: dict | None = None
-                   ) -> Tuple[int, List[Tuple[int,str]], Dict[str,int]]:
-
-
-
-    print("*"*80)
+def score_pkgbuild(
+    lines: List[str],
+    *,
+    local_path: pathlib.Path | None = None,
+    aur_meta: dict | None = None,
+) -> Tuple[int, List[Tuple[int, str]], Dict[str, int]]:
+    print("*" * 80)
     print(aur_meta)
 
     score = 100
@@ -71,11 +86,16 @@ def score_pkgbuild(lines: List[str],
     sums_arrays = [m.group(1) for l in lines if (m := CHECK_RE.match(l))]
     if not sums_arrays:
         note(W["missing_checksums"], "No checksum array", "integrity")
-    if re.search(r'^\s*(?:sha(?:1|224|256|384|512)|md5|b2)sums\s*=\s*\([\s\S]*?\bSKIP\b',
-                 txt, re.M):
+    if re.search(
+        r"^\s*(?:sha(?:1|224|256|384|512)|md5|b2)sums\s*=\s*\([\s\S]*?\bSKIP\b",
+        txt,
+        re.M,
+    ):
         total = len(re.findall(r'^\s*["\']?https?://', txt, re.M))
-        skipped = len(re.findall(r'\bSKIP\b', txt))
-        penalty = W["skip_checksum_all"] if skipped == total else W["skip_checksum_some"]
+        skipped = len(re.findall(r"\bSKIP\b", txt))
+        penalty = (
+            W["skip_checksum_all"] if skipped == total else W["skip_checksum_some"]
+        )
         note(penalty, "SKIP used in checksums", "integrity")
     if {"md5sums", "sha256sums"} & set(sums_arrays):
         note(W["weak_hash"], "Weak hash", "integrity")
@@ -84,7 +104,7 @@ def score_pkgbuild(lines: List[str],
     for url in URL_RE.findall(txt):
         if url.startswith(("http://", "ftp://")):
             note(W["insecure_url"], f"Insecure URL {url}", "transport")
-    if "git+https" in txt and not re.search(r'#\w*tag|\bcommit=', txt):
+    if "git+https" in txt and not re.search(r"#\w*tag|\bcommit=", txt):
         note(W["git_unpinned"], "Git source unpinned", "transport")
 
     # Privilege / networking
@@ -93,14 +113,16 @@ def score_pkgbuild(lines: List[str],
     uses_sudo = bool(SUDO_RE.search(txt))
     if uses_sudo:
         note(W["sudo_or_pacman"], "Uses sudo/pacman", "privilege")
-    pkg_body = re.search(r'package\(\)\s*\{([\s\S]*?)^\}', txt, re.M)
+    pkg_body = re.search(r"package\(\)\s*\{([\s\S]*?)^\}", txt, re.M)
     writes = bool(pkg_body and WRITE_CMD_RE.search(pkg_body.group(1)))
     if writes:
         note(W["privilege_escal"], "Writes outside $pkgdir", "privilege")
     if SETCAP_RE.search(txt):
         note(W["privilege_escal"], "Potential privilege escalation", "privilege")
 
-    if (BLOCK.get("uses_sudo") and uses_sudo) or (BLOCK.get("writes_outside_pkgdir") and writes):
+    if (BLOCK.get("uses_sudo") and uses_sudo) or (
+        BLOCK.get("writes_outside_pkgdir") and writes
+    ):
         msgs.append((0, "Fatal rule: privileged operation"))
         return 0, msgs, cat
 
@@ -111,14 +133,13 @@ def score_pkgbuild(lines: List[str],
         note(W["no_arch_field"], "No arch field", "metadata")
     if not any(l.startswith("# Maintainer:") for l in lines):
         note(W["no_maintainer_tag"], "No maintainer tag", "metadata")
-    if (e := namcap_errors(local_path)):
+    if e := namcap_errors(local_path):
         note(W["namcap_error"] * e, f"namcap {e} error(s)", "metadata")
 
     if aur_meta:
-
         votes = aur_meta.get("NumVotes", 0)
         maint = aur_meta.get("Maintainer")
-        ood   = aur_meta.get("OutOfDate") not in (0, None)
+        ood = aur_meta.get("OutOfDate") not in (0, None)
 
         # vote-based tiers
         if votes < 1:
@@ -136,8 +157,11 @@ def score_pkgbuild(lines: List[str],
         if ood:
             # aur returns epoch timestamp; convert once for readability
             age_days = int((time.time() - aur_meta["OutOfDate"]) / 86400)
-            note(W["aur_out_of_date"],
-                 f"Flagged out of date ({age_days} days)", "community")
+            note(
+                W["aur_out_of_date"],
+                f"Flagged out of date ({age_days} days)",
+                "community",
+            )
 
     # Apply caps
     for k, v in cat.items():
@@ -147,11 +171,13 @@ def score_pkgbuild(lines: List[str],
     score += sum(cat.values())
     return max(0, score), msgs, cat
 
+
 # ── fetchers  ─────────────────────────────────────────────────────
 # ── helper: fetch AUR JSON once per run ─────────────────────────
 def aur_metadata(pkg: str) -> dict:
-    url = ("https://aur.archlinux.org/rpc/"
-           "?v=5&type=info&arg[]=" + pkg) # will need to update when AUR moves to v6
+    url = (
+        "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=" + pkg
+    )  # will need to update when AUR moves to v6
     try:
         r = requests.get(url, timeout=10)
         r.raise_for_status()
@@ -167,15 +193,17 @@ def aur_metadata(pkg: str) -> dict:
 def fetch_url(url: str) -> List[str]:
     """Return the remote text split into lines; raise if we get HTML."""
     r = requests.get(url, timeout=10)
-    r.raise_for_status()                    # 4xx / 5xx ⇒ exception
+    r.raise_for_status()  # 4xx / 5xx ⇒ exception
     txt = r.text.lstrip()
-    if txt.startswith("<!DOCTYPE html"):    # GitLab login page, Cloudflare, etc.
+    if txt.startswith("<!DOCTYPE html"):  # GitLab login page, Cloudflare, etc.
         raise RuntimeError("HTML page returned instead of raw file")
     return txt.splitlines()
+
 
 # ── 2. fetch from AUR (always public) ────────────────────────────
 def fetch_aur(pkg: str) -> List[str]:
     return fetch_url(f"https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h={pkg}")
+
 
 # ── 3. fetch from the official repos with graceful fallbacks ─────
 def fetch_official(pkg: str) -> List[str]:
@@ -191,7 +219,7 @@ def fetch_official(pkg: str) -> List[str]:
     )
     try:
         return fetch_url(gl_url)
-    except Exception:                        # HTML login page or 404
+    except Exception:  # HTML login page or 404
         pass
 
     # 3b. GitHub mirrors
@@ -218,26 +246,38 @@ def fetch_official(pkg: str) -> List[str]:
 def main() -> None:
     ap = argparse.ArgumentParser(description="PKGBUILD analyzer")
     g = ap.add_mutually_exclusive_group(required=True)
-    g.add_argument("--file"); g.add_argument("--aur"); g.add_argument("--official"); g.add_argument("--url")
-    ap.add_argument("--rules"); ap.add_argument("-d", "--debug", action="store_true")
+    g.add_argument("--file")
+    g.add_argument("--aur")
+    g.add_argument("--official")
+    g.add_argument("--url")
+    ap.add_argument("--rules")
+    ap.add_argument("-d", "--debug", action="store_true")
     args = ap.parse_args()
 
     global W, CAP, BLOCK
-    r = load_rules(args.rules); W, CAP, BLOCK = r["weights"], r["caps"], r["blockers"]
+    r = load_rules(args.rules)
+    W, CAP, BLOCK = r["weights"], r["caps"], r["blockers"]
 
     if args.file:
-        p = pathlib.Path(args.file); lines = p.read_text().splitlines(); loc = p
-    elif args.aur:      lines, loc = fetch_aur(args.aur), None
+        p = pathlib.Path(args.file)
+        lines = p.read_text().splitlines()
+        loc = p
+    elif args.aur:
+        lines, loc = fetch_aur(args.aur), None
     elif args.official:
         try:
             lines, loc = fetch_official(args.official), None
         except RuntimeError as e:
             if "not found in official mirrors" in str(e):
-                print(f"'{args.official}' is not in the official repos; "
-                    f"try `--aur {args.official}`.", file=sys.stderr)
+                print(
+                    f"'{args.official}' is not in the official repos; "
+                    f"try `--aur {args.official}`.",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             raise
-    else:               lines, loc = fetch_url(args.url), None
+    else:
+        lines, loc = fetch_url(args.url), None
 
     if args.aur:
         aur_meta = aur_metadata(args.aur)
@@ -252,10 +292,15 @@ def main() -> None:
     msgs_sorted = sorted(msgs, key=lambda t: abs(t[0]), reverse=True)
     biggest = msgs_sorted[0][1] + f" ({msgs_sorted[0][0]})" if msgs_sorted else "None"
 
-    badge, grade = ("🟢", "Excellent") if score >= 90 else \
-                   ("🟡", "Good")      if score >= 70 else \
-                   ("🟠", "Fair")      if score >= 50 else \
-                   ("🔴", "Poor")
+    badge, grade = (
+        ("🟢", "Excellent")
+        if score >= 90
+        else ("🟡", "Good")
+        if score >= 70
+        else ("🟠", "Fair")
+        if score >= 50
+        else ("🔴", "Poor")
+    )
 
     if args.debug:
         print("\n─── PKGBUILD analysed ───")
@@ -270,7 +315,10 @@ def main() -> None:
     for score, msg in msgs_sorted:
         print(f"- {msg} ({score})")
 
+
 if __name__ == "__main__":
-    try: main()
+    try:
+        main()
     except Exception as e:
-        print(f"\nError: {e}\n", file=sys.stderr); sys.exit(1)
+        print(f"\nError: {e}\n", file=sys.stderr)
+        sys.exit(1)
