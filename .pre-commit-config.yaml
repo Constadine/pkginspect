@@ -33,6 +33,14 @@ repos:
     rev: v0.12.2
     hooks:
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        language: system
+        entry: mypy
+        require_serial: true
+        types: ["python"]
   # TOML
   - repo: https://github.com/pappasam/toml-sort
     rev: v0.24.2
