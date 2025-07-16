@@ -1,14 +1,38 @@
 name: build
 
+env:
+  FORCE_COLOR: 1
+  UV_FROZEN: 1
+  UV_PYTHON_PREFERENCE: only-managed
+
 on: [pull_request, push, workflow_dispatch]
 
 jobs:
   pre-commit:
+    env:
+      PRE_COMMIT_COLOR: always
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6.3.1
+      - name: Install dependencies
+        run: uv sync
+      - name: Identify Python version
+        id: identify-python
+        run: echo "python-version=$(uv run python -V | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+      - name: Cache pre-commit hooks
+        id: cache-pre-commit-hooks
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: ${{ runner.os }}-${{ runner.arch }}-python-${{ steps.identify-python.outputs.python-version }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-python-${{ steps.identify-python.outputs.python-version }}-pre-commit-
+      - name: Prune pre-commit hooks
+        if: steps.cache-pre-commit-hooks.outputs.cache-hit != 'true'
+        run: uv run pre-commit gc
       - name: Run pre-commit
-        uses: pre-commit/action@v3.0.1
+        run: uv run pre-commit run --show-diff-on-failure --all-files
