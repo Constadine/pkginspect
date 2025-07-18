@@ -34,5 +34,12 @@ jobs:
       - name: Prune pre-commit hooks
         if: steps.cache-pre-commit-hooks.outputs.cache-hit != 'true'
         run: uv run pre-commit gc
+      - name: Cache mypy
+        id: cache-mypy
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: .mypy_cache
+          key: ${{ runner.os }}-${{ runner.arch }}-python-${{ steps.identify-python.outputs.python-version }}-mypy-${{ hashFiles('uv.lock') }}-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-python-${{ steps.identify-python.outputs.python-version }}-mypy-${{ hashFiles('uv.lock') }}-
       - name: Run pre-commit
         run: uv run pre-commit run --show-diff-on-failure --all-files
