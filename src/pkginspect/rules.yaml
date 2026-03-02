@@ -3,14 +3,20 @@ weights:
   missing_checksums:   -30
   skip_checksum_some:  -30   # at least one SKIP
   skip_checksum_all:   -50   # every source is SKIP
-  weak_hash:           -5    # md5 or sha256 instead of sha512/b2
+  weak_hash:           -5    # md5 or sha1 only
   # Transport
   insecure_url:        -10
   git_unpinned:        -10
+  # Execution (dangerous patterns)
+  pipe_to_shell:       -30   # curl|sh, source <(curl ...)
+  eval_exec:           -15   # eval, exec, bash -c
+  obfuscation:         -25   # base64 --decode, xxd -r
+  ld_preload:          -20   # LD_PRELOAD= / LD_LIBRARY_PATH=
   # Privilege / build networking
   network_fetch:       -15
   sudo_or_pacman:      -25
   privilege_escal:     -10
+  setuid_bit:          -10   # chmod u+s, chmod 4755, setcap
   # Metadata absence
   no_license:          -3
   no_arch_field:       -2
@@ -28,6 +34,7 @@ weights:
 caps:
   integrity:  -50
   transport:  -30
+  execution:  -50
   privilege:  -40
   metadata:   -25
   community:  -20
