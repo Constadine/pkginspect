@@ -41,6 +41,7 @@ repos:
         entry: mypy
         require_serial: true
         types: ["python"]
+        exclude: ^tests/
   # TOML
   - repo: https://github.com/pappasam/toml-sort
     rev: v0.24.2
