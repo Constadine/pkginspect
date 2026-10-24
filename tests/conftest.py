@@ -24,3 +24,10 @@ def moderate_lines():
 @pytest.fixture
 def malicious_lines():
     return load_fixture("malicious.PKGBUILD")
+
+
+@pytest.fixture
+def config():
+    from pkginspect.rules import load_rules
+
+    return load_rules()

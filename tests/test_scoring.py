@@ -7,15 +7,16 @@ import pytest
 from pkginspect.rules import load_rules
 from pkginspect.scoring import (
     BASH_C_RE,
-    CURL_RE,
     EVAL_RE,
     LD_PRELOAD_RE,
     OBFUSCATION_RE,
     PACMAN_WRITE_RE,
     PIPE_SHELL_RE,
-    SETCAP_RE,
+    SETUID_RE,
+    WORLD_WRITABLE_RE,
     SUDO_RE,
-    WRITE_CMD_RE,
+    _SUMS_NAME_RE,
+    _writes_outside,
     extract_array,
     extract_package_bodies,
     score_pkgbuild,
@@ -49,8 +50,11 @@ class TestEvalRe:
     def test_eval(self):
         assert EVAL_RE.search("eval $VAR")
 
-    def test_exec(self):
-        assert EVAL_RE.search("exec /usr/bin/app")
+    def test_exec_is_not_eval(self):
+        # `exec` is the ubiquitous launcher idiom (exec /opt/app/app "$@") and
+        # `find -exec`; flagging it was a false positive.
+        assert not EVAL_RE.search('exec /opt/app/app "$@"')
+        assert not EVAL_RE.search("find . -name '*.so' -exec strip {} +")
 
     def test_no_match_evaldir(self):
         # 'evaldir' is not 'eval '
@@ -86,8 +90,8 @@ class TestLdPreloadRe:
     def test_ld_preload(self):
         assert LD_PRELOAD_RE.search("LD_PRELOAD=/usr/lib/evil.so make")
 
-    def test_ld_library_path(self):
-        assert LD_PRELOAD_RE.search("LD_LIBRARY_PATH=/tmp/libs ./app")
+    def test_ld_library_path_is_routine(self):
+        assert not LD_PRELOAD_RE.search("LD_LIBRARY_PATH=/tmp/libs ./app")
 
     def test_no_match_regular_make(self):
         assert not LD_PRELOAD_RE.search("make CFLAGS='-O2'")
@@ -95,55 +99,47 @@ class TestLdPreloadRe:
 
 class TestSetcapRe:
     def test_setcap(self):
-        assert SETCAP_RE.search("setcap cap_net_raw+ep /usr/bin/ping")
+        assert SETUID_RE.search("setcap cap_net_raw+ep /usr/bin/ping")
 
     def test_chmod_777(self):
-        assert SETCAP_RE.search("chmod 777 /usr/bin/app")
+        assert WORLD_WRITABLE_RE.search("chmod 777 /usr/bin/app")
 
     def test_chmod_setuid(self):
-        assert SETCAP_RE.search("chmod 4755 /usr/bin/app")
+        assert SETUID_RE.search("chmod 4755 /usr/bin/app")
 
     def test_chmod_u_plus_s(self):
-        assert SETCAP_RE.search("chmod u+s /usr/bin/app")
+        assert SETUID_RE.search("chmod u+s /usr/bin/app")
 
     def test_no_match_chmod_755(self):
-        assert not SETCAP_RE.search("chmod 755 /usr/bin/app")
+        assert not SETUID_RE.search("chmod 755 /usr/bin/app")
 
 
-class TestWriteCmdRe:
+class TestWritesOutside:
     def test_install_to_etc(self):
-        assert WRITE_CMD_RE.search("install -Dm644 foo.conf /etc/foo/bar.conf")
+        assert _writes_outside("install -Dm644 foo.conf /etc/foo/bar.conf")
 
     def test_cp_to_usr(self):
-        assert WRITE_CMD_RE.search("cp mybin /usr/bin/mybin")
+        assert _writes_outside("cp mybin /usr/bin/mybin")
 
     def test_sed_to_etc(self):
-        assert WRITE_CMD_RE.search("sed -i 's/old/new/' /etc/app/config")
+        assert _writes_outside("sed -i 's/old/new/' /etc/app/config")
 
     def test_no_match_install_to_pkgdir(self):
-        assert not WRITE_CMD_RE.search('install -Dm755 app "$pkgdir/usr/bin/app"')
+        assert not _writes_outside('install -Dm755 app "$pkgdir/usr/bin/app"')
 
 
-class TestCheckRe:
+class TestSumsNameRe:
     def test_plain_sha256(self):
-        from pkginspect.scoring import CHECK_RE
-
-        assert CHECK_RE.match("sha256sums=")
+        assert _SUMS_NAME_RE.match("sha256sums")
 
     def test_per_arch_sha256(self):
-        from pkginspect.scoring import CHECK_RE
-
-        assert CHECK_RE.match("sha256sums_x86_64=")
-
-    def test_per_arch_aarch64(self):
-        from pkginspect.scoring import CHECK_RE
-
-        assert CHECK_RE.match("sha256sums_aarch64=")
+        assert _SUMS_NAME_RE.match("sha256sums_x86_64")
 
     def test_per_arch_b2(self):
-        from pkginspect.scoring import CHECK_RE
+        assert _SUMS_NAME_RE.match("b2sums_armv7h")
 
-        assert CHECK_RE.match("b2sums_armv7h=")
+    def test_not_a_checksum(self):
+        assert not _SUMS_NAME_RE.match("pkgsums")
 
 
 def test_per_arch_checksums_not_flagged(config):
@@ -249,7 +245,7 @@ def test_moderate_score_range(moderate_lines, config):
 def test_moderate_detects_insecure_url(moderate_lines, config):
     result = score_pkgbuild(moderate_lines, config=config)
     messages = [f.message for f in result.findings]
-    assert any("Insecure URL" in m for m in messages)
+    assert any("plain HTTP" in m for m in messages)
 
 
 def test_moderate_detects_skip(moderate_lines, config):
