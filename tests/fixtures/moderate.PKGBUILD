@@ -7,8 +7,10 @@ arch=(x86_64)
 url="https://example.com"
 license=(GPL2)
 source=("http://example.com/moderate-pkg-${pkgver}.tar.gz"
+        "https://example.com/moderate-pkg-extras-${pkgver}.tar.gz"
         "git+https://github.com/example/repo")
-sha256sums=('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
+sha256sums=('SKIP'
+            'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
             'SKIP')
 
 build() {

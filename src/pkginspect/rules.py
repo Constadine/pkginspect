@@ -3,8 +3,9 @@ from __future__ import annotations
 import dataclasses
 import os
 import pathlib
+import pkgutil
+from typing import Any, Dict, Optional
 
-import importlib.resources as res
 import yaml
 
 
@@ -13,6 +14,15 @@ class RulesConfig:
     weights: dict[str, int]
     caps: dict[str, int]
     blockers: dict[str, bool]
+    path: Optional[str] = None  # file the rules came from ("bundled" for the default)
+
+
+def _bundled() -> Dict[str, Any]:
+    # pkgutil works on every supported Python (importlib.resources.files is 3.9+)
+    data = pkgutil.get_data("pkginspect", "rules.yaml")
+    if data is None:
+        raise OSError("bundled rules.yaml is missing from the pkginspect package")
+    return yaml.safe_load(data.decode("utf-8"))
 
 
 def load_rules(path_cli: str | None = None) -> RulesConfig:
@@ -27,10 +37,15 @@ def load_rules(path_cli: str | None = None) -> RulesConfig:
         / "pkginspect"
         / "rules.yaml",
     ]
+    raw = _bundled()
+    used = "bundled"
     for p in search:
         if p.is_file():
-            raw = yaml.safe_load(p.read_text())
-            return RulesConfig(raw["weights"], raw["caps"], raw["blockers"])
-    with res.files("pkginspect").joinpath("rules.yaml").open(encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
-    return RulesConfig(raw["weights"], raw["caps"], raw["blockers"])
+            # Merge over the bundled defaults so older user files keep working
+            # when new rules are added.
+            user = yaml.safe_load(p.read_text()) or {}
+            for section in ("weights", "caps", "blockers"):
+                raw[section] = {**raw[section], **(user.get(section) or {})}
+            used = str(p)
+            break
+    return RulesConfig(raw["weights"], raw["caps"], raw["blockers"], used)
